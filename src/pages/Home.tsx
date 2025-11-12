@@ -65,6 +65,20 @@ const Home = () => {
           </div>
         </div>
       ))}
+
+      <footer className="fixed bottom-0 left-0 right-0 z-40 bg-background/80 backdrop-blur-md border-t border-border">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-center gap-6 text-xs text-muted-foreground">
+            <Link to="/privacy" className="hover:text-primary transition-colors">
+              Политика конфиденциальности
+            </Link>
+            <span>•</span>
+            <Link to="/terms" className="hover:text-primary transition-colors">
+              Пользовательское соглашение
+            </Link>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 };

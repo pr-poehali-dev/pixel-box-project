@@ -10,6 +10,9 @@ import Gallery from "./pages/Gallery";
 import Instructions from "./pages/Instructions";
 import Buy from "./pages/Buy";
 import Contacts from "./pages/Contacts";
+import Privacy from "./pages/Privacy";
+import Terms from "./pages/Terms";
+import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -27,6 +30,9 @@ const App = () => (
           <Route path="/instructions" element={<Instructions />} />
           <Route path="/buy" element={<Buy />} />
           <Route path="/contacts" element={<Contacts />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/admin" element={<Admin />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Upload } from 'lucide-react';
+import Icon from '@/components/ui/icon';
 
 type MosaicType = 'lego' | 'coloring' | 'round' | 'square';
 type Orientation = 'landscape' | 'portrait' | 'square';
@@ -18,6 +18,9 @@ const Editor = () => {
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [flipH, setFlipH] = useState(false);
+  const [flipV, setFlipV] = useState(false);
+  const [rotation, setRotation] = useState(0);
   const canvasRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -49,10 +52,37 @@ const Editor = () => {
     return height / width;
   };
 
+  const fitImageToCanvas = () => {
+    if (!image || !canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const canvasWidth = canvas.offsetWidth;
+    const canvasHeight = canvas.offsetHeight;
+    const img = new Image();
+    img.onload = () => {
+      const imgAspect = img.width / img.height;
+      const canvasAspect = canvasWidth / canvasHeight;
+      let newScale = 1;
+      if (imgAspect > canvasAspect) {
+        newScale = canvasWidth / img.width;
+      } else {
+        newScale = canvasHeight / img.height;
+      }
+      setScale(newScale);
+      setPosition({ x: 0, y: 0 });
+    };
+    img.src = image;
+  };
+
   useEffect(() => {
     const sizes = getSizes();
     setSize(sizes[0]);
   }, [mosaicType, orientation]);
+
+  useEffect(() => {
+    if (image) {
+      fitImageToCanvas();
+    }
+  }, [image, size, orientation]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -60,11 +90,56 @@ const Editor = () => {
       const reader = new FileReader();
       reader.onload = (event) => {
         setImage(event.target?.result as string);
-        setScale(1);
-        setPosition({ x: 0, y: 0 });
+        setFlipH(false);
+        setFlipV(false);
+        setRotation(0);
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleCanvasClick = () => {
+    if (!image) {
+      fileInputRef.current?.click();
+    }
+  };
+
+  const downloadMosaic = () => {
+    if (!image || !canvasRef.current) return;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const match = size.match(/(\d+)x(\d+)/);
+    if (!match) return;
+    const height = parseInt(match[1]);
+    const width = parseInt(match[2]);
+    
+    canvas.width = width * 10;
+    canvas.height = height * 10;
+
+    const img = new Image();
+    img.onload = () => {
+      ctx.save();
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.rotate((rotation * Math.PI) / 180);
+      ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+      ctx.scale(scale, scale);
+      ctx.drawImage(img, -img.width / 2 + position.x / scale, -img.height / 2 + position.y / scale);
+      ctx.restore();
+
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `mosaic_${width}x${height}.png`;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+      });
+    };
+    img.src = image;
   };
 
   const handleWheel = (e: React.WheelEvent) => {
@@ -92,6 +167,29 @@ const Editor = () => {
   };
 
   const aspectRatio = getAspectRatio();
+  const maxWidth = 500;
+  const maxHeight = 490;
+  let canvasWidth, canvasHeight;
+
+  if (orientation === 'landscape') {
+    canvasWidth = maxWidth;
+    canvasHeight = maxWidth * aspectRatio;
+    if (canvasHeight > maxHeight) {
+      canvasHeight = maxHeight;
+      canvasWidth = maxHeight / aspectRatio;
+    }
+  } else if (orientation === 'portrait') {
+    canvasHeight = maxHeight;
+    canvasWidth = maxHeight / aspectRatio;
+    if (canvasWidth > maxWidth) {
+      canvasWidth = maxWidth;
+      canvasHeight = maxWidth * aspectRatio;
+    }
+  } else {
+    const sizeVal = Math.min(maxWidth, maxHeight);
+    canvasWidth = sizeVal;
+    canvasHeight = sizeVal;
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -180,54 +278,100 @@ const Editor = () => {
               onChange={handleImageUpload}
               className="hidden"
             />
+            
             <Button 
-              onClick={() => fileInputRef.current?.click()} 
-              className="w-full"
-              variant="outline"
+              onClick={downloadMosaic}
+              className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+              disabled={!image}
             >
-              <Upload className="mr-2 h-4 w-4" />
-              Загрузить изображение
+              Создать варианты Мозаики
             </Button>
           </div>
 
-          <div className="flex items-center justify-center">
+          <div className="flex items-center justify-center gap-4">
             <div 
               ref={canvasRef}
               className="relative bg-card border-2 border-primary/30 rounded-lg shadow-2xl overflow-hidden cursor-move"
               style={{
-                width: aspectRatio > 1 ? '400px' : `${400 / aspectRatio}px`,
-                height: aspectRatio > 1 ? `${400 * aspectRatio}px` : '700px',
-                maxWidth: '100%',
-                maxHeight: '700px'
+                width: `${canvasWidth}px`,
+                height: `${canvasHeight}px`
               }}
               onWheel={handleWheel}
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
               onMouseLeave={handleMouseUp}
+              onClick={handleCanvasClick}
             >
               {image ? (
-                <img
-                  src={image}
-                  alt="Uploaded"
-                  className="absolute pixel-effect select-none"
-                  style={{
-                    transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
-                    transformOrigin: 'center',
-                    maxWidth: 'none',
-                    pointerEvents: 'none'
-                  }}
-                  draggable={false}
-                />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <img
+                    src={image}
+                    alt="Uploaded"
+                    className="pixel-effect select-none"
+                    style={{
+                      transform: `translate(${position.x}px, ${position.y}px) scale(${scale}) scaleX(${flipH ? -1 : 1}) scaleY(${flipV ? -1 : 1}) rotate(${rotation}deg)`,
+                      transformOrigin: 'center',
+                      maxWidth: 'none',
+                      pointerEvents: 'none'
+                    }}
+                    draggable={false}
+                  />
+                </div>
               ) : (
-                <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+                <div className="absolute inset-0 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors">
                   <div className="text-center">
-                    <Upload className="mx-auto h-12 w-12 mb-2 opacity-50" />
-                    <p>Загрузите изображение</p>
+                    <Icon name="Upload" size={48} className="mx-auto mb-2 opacity-50" />
+                    <p>Нажмите для загрузки</p>
                   </div>
                 </div>
               )}
             </div>
+
+            {image && (
+              <div className="flex flex-col gap-2">
+                <Button
+                  size="icon"
+                  variant="outline"
+                  onClick={() => setScale(prev => Math.min(3, prev + 0.1))}
+                  title="Увеличить"
+                >
+                  <Icon name="ZoomIn" size={20} />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="outline"
+                  onClick={() => setScale(prev => Math.max(0.5, prev - 0.1))}
+                  title="Уменьшить"
+                >
+                  <Icon name="ZoomOut" size={20} />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="outline"
+                  onClick={() => setFlipV(!flipV)}
+                  title="Отразить по вертикали"
+                >
+                  <Icon name="FlipVertical" size={20} />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="outline"
+                  onClick={() => setFlipH(!flipH)}
+                  title="Отразить по горизонтали"
+                >
+                  <Icon name="FlipHorizontal" size={20} />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="outline"
+                  onClick={() => setRotation(prev => (prev + 90) % 360)}
+                  title="Повернуть на 90°"
+                >
+                  <Icon name="RotateCw" size={20} />
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </div>
